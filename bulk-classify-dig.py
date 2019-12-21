@@ -17,10 +17,58 @@ import os
 from sourmash.logging import error, debug, set_quiet, notify
 from sourmash.lca import lca_utils
 from sourmash.lca.command_classify import classify_signature
-from sourmash.lca.command_summarize import summarize
 import argparse
 
 FILTER_AT='order'
+
+
+def summarize_agg_to_level(hashvals, dblist, threshold, level):
+    """
+    Classify 'hashvals' using the given list of databases.
+
+    Insist on at least 'threshold' counts of a given lineage before taking
+    it seriously.
+
+    Return (lineage, counts) where 'lineage' is a tuple of LineagePairs.
+    """
+
+    stop_at = []
+    for i in lca_utils.taxlist(include_strain=False):
+        stop_at.append(i)
+        if i == level:
+            break
+
+    # gather assignments from across all the databases
+    assignments = lca_utils.gather_assignments(hashvals, dblist)
+
+    # now convert to trees -> do LCA & counts
+    counts = lca_utils.count_lca_for_assignments(assignments)
+    debug(counts.most_common())
+
+    # ok, we now have the LCAs for each hashval, and their number
+    # of counts. Now aggregate counts across the tree, up 'til desired
+    # level; stop there.
+    aggregated_counts = defaultdict(int)
+    for lca, count in counts.most_common():
+        if count < threshold:
+            break
+
+        if not lca:
+            aggregated_counts[lca] += count
+            continue
+
+        if lca[-1].rank in stop_at:
+            aggregated_counts[lca] += count
+            continue
+
+        # climb from the lca to the root.
+        while lca:
+            lca = lca[:-1]
+            if lca and lca[-1].rank in stop_at:
+                aggregated_counts[lca] += count
+                break
+
+    return aggregated_counts
 
 
 def main(args):
@@ -36,6 +84,7 @@ def main(args):
                    help='suppress non-error output')
     p.add_argument('-d', '--debug', action='store_true',
                    help='output debugging output')
+    p.add_argument('--confused-hashvals', type=str)
     args = p.parse_args(args)
 
     dirname = '{}-unclassified-sigs'.format(args.prefix)
@@ -57,6 +106,11 @@ def main(args):
     assert len(dblist) == 1
     lca_db = dblist[0]
 
+    confused_hashvals = set()
+    if args.confused_hashvals:
+        for i in open(args.confused_hashvals, 'rt'):
+            confused_hashvals.add(int(i.strip()))
+
     ###
 
     fp = open(args.classify_csv, 'rt')
@@ -76,28 +130,23 @@ def main(args):
 
         hashvals = defaultdict(int)
         for hashval in sig.minhash.get_mins():
-            hashvals[hashval] += 1
+            if hashval not in confused_hashvals:
+                hashvals[hashval] += 1
 
-        lineage_counts = summarize(hashvals, dblist, args.threshold)
+        lineage_counts = summarize_agg_to_level(hashvals, dblist, args.threshold, FILTER_AT)
 
-        match_list = set()
-        for lineage, count in lineage_counts.items():
-            if lineage:
-                pair = lineage[-1]
-                if pair.rank == FILTER_AT:
-                    match_list.add(lineage)
-
-        if len(match_list) >= 2:
+        if len(lineage_counts) >= 2:
             print(name)
-            for lineage in match_list:
-                print('   ', ";".join(lca_utils.zip_lineage(lineage)))
+            for lineage, count in lineage_counts.items():
+                if lineage:
+                    print('   ', count, ";".join(lca_utils.zip_lineage(lineage)))
+                else:
+                    print('   ', count, 'root')
             print('----\n')
 
             fp3 = open(os.path.join(dirname2, row['md5sum']) + '.txt', 'wt')
             for lineage, count in lineage_counts.items():
-                printme = 0
-                if lineage in match_list:
-                    fp3.write("{} {}\n".format(count, ";".join(lca_utils.zip_lineage(lineage))))
+                fp3.write("{} {}\n".format(count, ";".join(lca_utils.zip_lineage(lineage))))
             fp3.close()
                 
             n += 1

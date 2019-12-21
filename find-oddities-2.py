@@ -1,4 +1,8 @@
 #! /usr/bin/env python
+"""
+Look for compositional oddities that do not match ANI in an LCA.
+(Ignore taxonomy except for reporting.)
+"""
 import sourmash
 import sys
 from collections import defaultdict

@@ -1,4 +1,8 @@
 #! /usr/bin/env python
+"""
+Given two genomes, extract contigs from the first that are > 80% contained in
+the second.
+"""
 import argparse
 import sourmash
 import screed

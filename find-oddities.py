@@ -1,4 +1,7 @@
 #! /usr/bin/env python
+"""
+Look for compositional + taxonomic oddities in an LCA database.
+"""
 import sourmash
 import sys
 from collections import defaultdict
@@ -53,29 +56,25 @@ def make_lca_counts(dblist, min_num=0):
 
     mixdict_items = list(mixdict.items())
     mixdict_items.sort(key = lambda x: -len(x[1]))
+
+    confused_hashvals = set()
                          
     for n, (k, v) in enumerate(mixdict_items):
         if len(v) > 5:
             print('cluster {} has {} assignments for {} hashvals / {} bp'.format(n, len(k), len(v), dblist[0].scaled * len(v)))
+            confused_hashvals.update(v)
             for lineage in k:
                 print('* ', "; ".join(lca_utils.zip_lineage(lineage)))
 
                 lids = dblist[0].lineage_to_lids[lineage]
-                assert(len(lids) == 1)
-                lid = lids.pop()
-
-                idxs = dblist[0].lid_to_idx[lid]
-                assert(len(idxs) == 1)
-                idx = idxs.pop()
-
-                idents = dblist[0].idx_to_idents[idx]
-                assert(len(idents) == 1)
-                ident = idents.pop()
-
-                print('  ', ident)
+                for lid in lids:
+                    idxs = dblist[0].lid_to_idx[lid]
+                    for idx in idxs:
+                        ident = dblist[0].idx_to_ident[idx]
+                        print('  ', ident)
             print('')
 
-    return counts
+    return counts, confused_hashvals
 
 
 def rankinfo_main(args):
@@ -106,7 +105,10 @@ def rankinfo_main(args):
     dblist, ksize, scaled = lca_utils.load_databases(args.db, args.scaled)
 
     # count all the LCAs across these databases
-    counts = make_lca_counts(dblist, args.minimum_num)
+    counts, confused_hashvals = make_lca_counts(dblist, args.minimum_num)
+
+    with open('confused_hashvals.txt', 'wt') as fp:
+        fp.write("\n".join([ str(i) for i in confused_hashvals ]))
 
 
 if __name__ == '__main__':
