@@ -1,4 +1,15 @@
 #! /usr/bin/env python
+"""
+Try to classify everything in an SBT using an LCA database.
+
+Uses `sourmash lca classify` algorithm on every signature in the SBT.
+
+Outputs a spreadsheet of classifications. The first column indicates
+the lowest taxonomic rank at which something is unambiguously classified,
+and will be "MISSED" if no classification is available.
+
+Also outputs a directory of unclassified signatures.
+"""
 import sourmash
 import sys
 from collections import defaultdict

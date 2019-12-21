@@ -1,4 +1,12 @@
 #! /usr/bin/env python
+"""
+Dig into the bulk classification results from bulk-classify-sbt-with-lca.py.
+
+Briefly, this script sorts results classed above order level into two bins
+* those that contain multiple hashes belonging unambiguously to two different
+  species, i.e. chimerae.
+* other, e.g. things classed as a single lineage.
+"""
 import sourmash
 import sys
 from collections import defaultdict
@@ -11,6 +19,8 @@ from sourmash.lca import lca_utils
 from sourmash.lca.command_classify import classify_signature
 from sourmash.lca.command_summarize import summarize
 import argparse
+
+FILTER_AT='order'
 
 
 def main(args):
@@ -70,26 +80,23 @@ def main(args):
 
         lineage_counts = summarize(hashvals, dblist, args.threshold)
 
-        species_list = set()
+        match_list = set()
         for lineage, count in lineage_counts.items():
-            for pair in lineage:
-                if pair.rank == 'genus':
-                    species_list.add(lineage)
-                    break
+            if lineage:
+                pair = lineage[-1]
+                if pair.rank == FILTER_AT:
+                    match_list.add(lineage)
 
-        if len(species_list) >= 2:
+        if len(match_list) >= 2:
             print(name)
-            for lineage in species_list:
+            for lineage in match_list:
                 print('   ', ";".join(lca_utils.zip_lineage(lineage)))
             print('----\n')
 
             fp3 = open(os.path.join(dirname2, row['md5sum']) + '.txt', 'wt')
             for lineage, count in lineage_counts.items():
                 printme = 0
-                for pair in lineage:
-                    if pair.rank == 'genus':
-                        printme = 1
-                if printme:
+                if lineage in match_list:
                     fp3.write("{} {}\n".format(count, ";".join(lca_utils.zip_lineage(lineage))))
             fp3.close()
                 
@@ -97,6 +104,7 @@ def main(args):
 
             w.writerow(['chimera', row['name'], row['filename'], row['md5sum']])
         else:
+            w.writerow(['other', row['name'], row['filename'], row['md5sum']])
             m += 1
 
     print(n, m)
