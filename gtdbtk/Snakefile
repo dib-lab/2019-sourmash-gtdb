@@ -4,10 +4,10 @@ rule gtdbtk_gather_matches:
     using a path specified in a file in the environment. I predownloaded the 
     databases and placed them in the required location.
     The path is in this file:
-    .snakemake/conda/9de8946b/etc/conda/activate.d/gtdbtk.sh
+    .snakemake/conda/1261315d/etc/conda/activate.d/gtdbtk.sh
     """
     input: "genomes"
-    output: "outputs/gtdbtk/gtdbtk.summary.tsv"
+    output: directory("outputs/gtdbtk/")
     params:  outdir = "outputs/gtdbtk"
     conda: "env-gtdbtk.yml"
     shell:'''
