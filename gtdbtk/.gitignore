@@ -1,0 +1,4 @@
+genomes
+outputs
+.snakemake
+slurm-*.out
