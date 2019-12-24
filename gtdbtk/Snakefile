@@ -12,10 +12,7 @@ for root, dirs, files in os.walk('genomes/', topdown=False):
 rule all:
     input:
         "outputs/gtdbtk/",
-        [ i + '.sig.lca.k21.txt' for i in all_files ],
-        [ i + '.sig.lca.k51.txt' for i in all_files ],
-        [ i + '.sig.sbt.k21.txt' for i in all_files ],
-        [ i + '.sig.sbt.k51.txt' for i in all_files ]
+        [ i + '.sig' for i in all_files ],
 
 rule sigs:
     input:

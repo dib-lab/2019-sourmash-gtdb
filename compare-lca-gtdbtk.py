@@ -100,6 +100,8 @@ def main():
     print('x'*50)
 
     both_lin = set(tk_lineages).union(set(lca_lineages))
+    n_match1 = 0
+    n_match2 = 0
     for k in both_lin:
         tk_lin = tk_lineages.get(k, ())
         lca_lin = lca_lineages.get(k, ())
@@ -111,21 +113,31 @@ def main():
         print('lca', k,  ';'.join(lca_utils.zip_lineage(lca_lin, include_strain=False)))
         tree = lca_utils.build_tree((tk_lin, lca_lin))
         tree_lca, reason = lca_utils.find_lca(tree)
-        print(tree_lca, reason)
+#        print(tree_lca, reason)
         lca_lin2 = list(lca_lin)
         while lca_lin2 and not lca_lin2[-1].name:
             lca_lin2.pop()
 
         tree_lca = list(tree_lca)
         if tree_lca[:len(lca_lin2)] == lca_lin2:
-            print('*' * 30)
+            print('MATCH1')
+            n_match1 += 1
+        else:
+            print('NOMATCH1')
 
-        if tree_lca == lca_lin:
-            print('y' * 30)
-            break
-        pprint.pprint(tree_lca)
-        pprint.pprint(lca_lin)
-        print('------')
+        if tree_lca == list(lca_lin):
+            print('MATCH2')
+            n_match2 += 1
+        else:
+            print('NOMATCH2')
+#        pprint.pprint(tree_lca)
+#        pprint.pprint(lca_lin)
+#        print('------')
+
+    print('match 1:', n_match1 / len(lca_d))
+    print('match 2:', n_match2 / len(lca_d))
+
+
 
 
 if __name__ == '__main__':
