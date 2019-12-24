@@ -15,7 +15,7 @@ cd /home/ctbrown/2019-sourmash-gtdb/gtdbtk
 
 conda activate sgc
 
-snakemake --use-conda
+snakemake --use-conda -j 8
 
 set -o nounset
 set -o errexit

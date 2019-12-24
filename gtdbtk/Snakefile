@@ -1,3 +1,50 @@
+import os
+import random
+
+all_files = []
+for root, dirs, files in os.walk('genomes/', topdown=False):
+    for name in files:
+        if name.endswith('_genomic.fna.gz'):
+            filename = os.path.join(root, name)
+            if filename.startswith('./'): filename = filename[2:]
+            all_files.append(filename)
+
+rule all:
+    input:
+        "outputs/gtdbtk/",
+        [ i + '.sig.lca.k21.txt' for i in all_files ],
+        [ i + '.sig.lca.k51.txt' for i in all_files ],
+        [ i + '.sig.sbt.k21.txt' for i in all_files ],
+        [ i + '.sig.sbt.k51.txt' for i in all_files ]
+
+rule sigs:
+    input:
+        "{genome}"
+    output:
+        "{genome}.sig"
+    shell:
+        "sourmash compute -k 21,31,51 --scaled=1000 {input} -o {output}"
+
+rule lca:
+    input:
+        "{genome}.sig"
+    output:
+        "{genome}.sig.lca.k{ksize}.txt"
+    params:
+        ksize="{ksize}"
+    shell:
+        "sourmash lca summarize --query {input} --db ~/sourmash_databases/gtdb/gtdb-release89-k{params.ksize}.lca.json.gz -o {output}"
+
+rule sbt:
+    input:
+        "{genome}.sig"
+    output:
+        "{genome}.sig.sbt.k{ksize}.txt"
+    params:
+        ksize="{ksize}"
+    shell:
+        "sourmash gather {input} ~/sourmash_databases/gtdb/gtdb-release89-k{params.ksize}.sbt.json -o {output} -k {params.ksize} --scaled=10000"
+
 rule gtdbtk_gather_matches:
     """
     this rule require the gtdbtk databases. The tool finds the database by 
