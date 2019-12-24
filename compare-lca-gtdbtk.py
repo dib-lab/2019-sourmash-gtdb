@@ -13,6 +13,7 @@ def main():
     p = argparse.ArgumentParser()
     p.add_argument('gtdbtk_dir')
     p.add_argument('lca_classify_out')
+    p.add_argument('-v', '--verbose', action='store_true')
     args = p.parse_args()
 
     lca_d = {}
@@ -48,10 +49,11 @@ def main():
     lca_keys = set(lca_d.keys())
     tk_keys = set(tk_d.keys())
 
-    print('{} input genomes:'.format(len(lca_d)))
+    print('{} input genomes'.format(len(lca_d)))
 
-    print('gtbtk failed to output:')
-    pprint.pprint(lca_keys - tk_keys)
+    if lca_keys - tk_keys:
+        print('gtbtk failed to output:')
+        pprint.pprint(lca_keys - tk_keys)
 
     assert not (tk_keys - lca_keys)
 
@@ -75,11 +77,8 @@ def main():
                 name = row[rank]
                 lineage.append(lca_utils.LineagePair(rank=rank, name=name))
             lineage = tuple(lineage)
-
-#            print(';'.join(lca_utils.zip_lineage(lineage, include_strain=False)))
             lca_lineages[k] = lineage
 
-    print('--')
     tk_lineages = {}
     for k, row in tk_d.items():
         classify = row['classification']
@@ -93,49 +92,61 @@ def main():
         lineage = []
         for rank, name in zip(lca_utils.taxlist(include_strain=False), classify):
             lineage.append(lca_utils.LineagePair(rank=rank, name=name))
-#        print(';'.join(lca_utils.zip_lineage(lineage, include_strain=False)))
 
         tk_lineages[k] = lineage
-
-    print('x'*50)
 
     both_lin = set(tk_lineages).union(set(lca_lineages))
     n_match1 = 0
     n_match2 = 0
+    total = 0
     for k in both_lin:
         tk_lin = tk_lineages.get(k, ())
         lca_lin = lca_lineages.get(k, ())
 
         if not tk_lin or not lca_lin:
+            if not tk_lin and not lca_lin:
+                print('skipping comparison b/c absent from both gtdb-tk and sourmash:', k)
+            elif not tk_lin:
+                print('skipping comparison b/c absent from gtdb-tk:', k)
+            elif not lca_lin:
+                print('skipping comparison b/c absent from sourmash:', k)
             continue
 
-        print('tk', k, ';'.join(lca_utils.zip_lineage(tk_lin, include_strain=False)))
-        print('lca', k,  ';'.join(lca_utils.zip_lineage(lca_lin, include_strain=False)))
+        total += 1
+
         tree = lca_utils.build_tree((tk_lin, lca_lin))
         tree_lca, reason = lca_utils.find_lca(tree)
-#        print(tree_lca, reason)
+
         lca_lin2 = list(lca_lin)
         while lca_lin2 and not lca_lin2[-1].name:
             lca_lin2.pop()
 
+        display = False
         tree_lca = list(tree_lca)
         if tree_lca[:len(lca_lin2)] == lca_lin2:
-            print('MATCH1')
             n_match1 += 1
         else:
-            print('NOMATCH1')
+            if args.verbose:
+                print('** mismatch at sourmash lca classification level', k)
+            display = True
 
         if tree_lca == list(lca_lin):
-            print('MATCH2')
             n_match2 += 1
         else:
-            print('NOMATCH2')
+            display = True
+            if args.verbose:
+                print('** mismatch at full GTDB-Tk level', k)
+
+        if display and args.verbose:
+            print('tk', k, ';'.join(lca_utils.zip_lineage(tk_lin, include_strain=False)))
+            print('lca', k,  ';'.join(lca_utils.zip_lineage(lca_lin, include_strain=False)))
+            
 #        pprint.pprint(tree_lca)
 #        pprint.pprint(lca_lin)
 #        print('------')
 
-    print('match 1:', n_match1 / len(lca_d))
-    print('match 2:', n_match2 / len(lca_d))
+    print('match at full sourmash lca: {:.1f}'.format(n_match1 / total * 100))
+    print('match at full GTDB-Tk lineage: {:.1f}'.format(n_match2 / total * 100))
 
 
 
