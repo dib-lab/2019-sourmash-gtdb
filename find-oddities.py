@@ -11,10 +11,22 @@ from sourmash.logging import error, debug, set_quiet, notify
 from sourmash.lca import lca_utils
 
 
-def make_lca_counts(dblist, min_num=0):
+def make_lca_counts(dblist, lowest_rank='phylum', min_num=0, min_hashes=5):
     """
     Collect counts of all the LCAs in the list of databases.
     """
+    assert len(dblist) == 1
+
+    keep_ranks = ['root']
+    for rank in lca_utils.taxlist():
+        keep_ranks.append(rank)
+        if rank == lowest_rank:
+            break
+    print('keeping hashvals at following ranks:', keep_ranks)
+    print('min number of lineages:', min_num)
+    print('min number of shared hashes:', min_hashes)
+
+    print('---')
 
     # gather all hashvalue assignments from across all the databases
     assignments = defaultdict(set)
@@ -45,7 +57,11 @@ def make_lca_counts(dblist, min_num=0):
 
         # find cross-superkingdom hashes, and record combinations of lineages
         # that have them.
-        if not len(lca) or lca[-1].rank == 'superkingdom':
+        rank = 'root'
+        if lca:
+            rank = lca[-1].rank
+        
+        if rank in keep_ranks:
             xx = []
             for lineage in lineages:
                 xx.append(tuple(lineage))
@@ -55,28 +71,40 @@ def make_lca_counts(dblist, min_num=0):
 
         counts[lca] += 1
 
+    # sort on number of confused hash vals by combination of lineages.
     mixdict_items = list(mixdict.items())
     mixdict_items.sort(key = lambda x: -len(x[1]))
 
     confused_hashvals = set()
 
     # filter & display
-    for n, (k, v) in enumerate(mixdict_items):
-        # insist on more than 5 hash vals
-        if len(v) > 5:
-            # display:
-            print('cluster {} has {} assignments for {} hashvals / {} bp'.format(n, len(k), len(v), dblist[0].scaled * len(v)))
-            confused_hashvals.update(v)
-            for lineage in k:
-                print('* ', "; ".join(lca_utils.zip_lineage(lineage)))
+    for n, (lineages, hashvals) in enumerate(mixdict_items):
+        # insist on more than N hash vals
+        if len(hashvals) < min_hashes:
+            continue
+        
+        # display summary:
+        print('cluster {} has {} assignments for {} hashvals / {} bp'.format(n, len(lineages), len(hashvals), dblist[0].scaled * len(hashvals)))
+        confused_hashvals.update(hashvals)
 
-                lids = dblist[0].lineage_to_lids[lineage]
-                for lid in lids:
-                    idxs = dblist[0].lid_to_idx[lid]
-                    for idx in idxs:
-                        ident = dblist[0].idx_to_ident[idx]
-                        print('  ', ident)
-            print('')
+        tree = lca_utils.build_tree(lineages)
+        lca, reason = lca_utils.find_lca(tree)
+        if lca:
+            rank = lca[-1].rank
+        else:
+            rank = 'root'
+        print('rank & lca:', rank, ";".join(lca_utils.zip_lineage(lca, truncate_empty=True)))
+
+        for lineage in lineages:
+            print('* ', "; ".join(lca_utils.zip_lineage(lineage)))
+
+            lids = dblist[0].lineage_to_lids[lineage]
+            for lid in lids:
+                idxs = dblist[0].lid_to_idx[lid]
+                for idx in idxs:
+                    ident = dblist[0].idx_to_ident[idx]
+                    print('  ', ident)
+        print('')
 
     return counts, confused_hashvals
 
@@ -91,6 +119,9 @@ def main(args):
                    help='output debugging output')
     p.add_argument('--minimum-num', type=int, default=0,
                    help='Minimum number of different lineages a k-mer must be in to be counted')
+    p.add_argument('--minimum-hashes', type=int, default=5,
+                   help='Minimum number of hashes lineages must share to be reported')
+    p.add_argument('--lowest-rank', default='phylum')
     args = p.parse_args(args)
 
     if not args.db:
@@ -103,11 +134,15 @@ def main(args):
         args.scaled = int(args.scaled)
 
     # load all the databases
+    print('loading databases:', args.db)
     dblist, ksize, scaled = lca_utils.load_databases(args.db, args.scaled)
     assert len(dblist) == 1
 
     # count all the LCAs across these databases
-    counts, confused_hashvals = make_lca_counts(dblist, args.minimum_num)
+    counts, confused_hashvals = make_lca_counts(dblist,
+                                                lowest_rank=args.lowest_rank,
+                                                min_num=args.minimum_num,
+                                                min_hashes=args.minimum_hashes)
 
     with open('confused_hashvals.txt', 'wt') as fp:
         fp.write("\n".join([ str(i) for i in confused_hashvals ]))
