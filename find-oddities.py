@@ -6,12 +6,14 @@ import sourmash
 import sys
 from collections import defaultdict
 import argparse
+import csv
 
 from sourmash.logging import error, debug, set_quiet, notify
 from sourmash.lca import lca_utils
 
 
-def make_lca_counts(dblist, lowest_rank='phylum', min_num=0, min_hashes=5):
+def make_lca_counts(dblist, lowest_rank='phylum', min_num=0, min_hashes=5,
+                    prefix='oddities'):
     """
     Collect counts of all the LCAs in the list of databases.
     """
@@ -77,6 +79,11 @@ def make_lca_counts(dblist, lowest_rank='phylum', min_num=0, min_hashes=5):
 
     confused_hashvals = set()
 
+    fp = open(prefix + '.csv', 'wt')
+    w = csv.writer(fp)
+    w.writerow(['cluster', 'num_lineages', 'shared_bp', 'rank', 'lca',
+                'ident1', 'lineage1', 'ident2', 'lineage2'])
+
     # filter & display
     for n, (lineages, hashvals) in enumerate(mixdict_items):
         # insist on more than N hash vals
@@ -93,10 +100,12 @@ def make_lca_counts(dblist, lowest_rank='phylum', min_num=0, min_hashes=5):
             rank = lca[-1].rank
         else:
             rank = 'root'
-        print('rank & lca:', rank, ";".join(lca_utils.zip_lineage(lca, truncate_empty=True)))
+        print('rank & lca:', rank, lca_utils.display_lineage(lca))
 
+        lin_display = []
+        idents = []
         for lineage in lineages:
-            print('* ', "; ".join(lca_utils.zip_lineage(lineage)))
+            print('* ', lca_utils.display_lineage(lineage))
 
             lids = dblist[0].lineage_to_lids[lineage]
             for lid in lids:
@@ -104,7 +113,19 @@ def make_lca_counts(dblist, lowest_rank='phylum', min_num=0, min_hashes=5):
                 for idx in idxs:
                     ident = dblist[0].idx_to_ident[idx]
                     print('  ', ident)
+                    lin_display.append(lca_utils.display_lineage(lineage))
+                    idents.append(ident)
         print('')
+
+        w.writerow(['cluster{}'.format(n),
+                    len(lineages),
+                    len(hashvals) * dblist[0].scaled,
+                    rank,
+                    lca_utils.display_lineage(lca),
+                    idents[0],
+                    lin_display[0],
+                    idents[1],
+                    lin_display[1]])
 
     return counts, confused_hashvals
 
@@ -122,6 +143,7 @@ def main(args):
     p.add_argument('--minimum-hashes', type=int, default=5,
                    help='Minimum number of hashes lineages must share to be reported')
     p.add_argument('--lowest-rank', default='phylum')
+    p.add_argument('--prefix', default=None, help='prefix for output files')
     args = p.parse_args(args)
 
     if not args.db:
@@ -142,7 +164,9 @@ def main(args):
     counts, confused_hashvals = make_lca_counts(dblist,
                                                 lowest_rank=args.lowest_rank,
                                                 min_num=args.minimum_num,
-                                                min_hashes=args.minimum_hashes)
+                                                min_hashes=args.minimum_hashes,
+                                                prefix=args.prefix
+    )
 
     with open('confused_hashvals.txt', 'wt') as fp:
         fp.write("\n".join([ str(i) for i in confused_hashvals ]))
