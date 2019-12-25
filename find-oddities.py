@@ -5,17 +5,15 @@ Look for compositional + taxonomic oddities in an LCA database.
 import sourmash
 import sys
 from collections import defaultdict
+import argparse
 
 from sourmash.logging import error, debug, set_quiet, notify
 from sourmash.lca import lca_utils
-from sourmash.sourmash_args import SourmashArgumentParser
 
 
 def make_lca_counts(dblist, min_num=0):
     """
     Collect counts of all the LCAs in the list of databases.
-
-    CTB this could usefully be converted to a generator function.
     """
 
     # gather all hashvalue assignments from across all the databases
@@ -44,6 +42,9 @@ def make_lca_counts(dblist, min_num=0):
         # now find either a leaf or the first node with multiple
         # children; that's our lowest-common-ancestor node.
         lca, reason = lca_utils.find_lca(tree)
+
+        # find cross-superkingdom hashes, and record combinations of lineages
+        # that have them.
         if not len(lca) or lca[-1].rank == 'superkingdom':
             xx = []
             for lineage in lineages:
@@ -58,9 +59,12 @@ def make_lca_counts(dblist, min_num=0):
     mixdict_items.sort(key = lambda x: -len(x[1]))
 
     confused_hashvals = set()
-                         
+
+    # filter & display
     for n, (k, v) in enumerate(mixdict_items):
+        # insist on more than 5 hash vals
         if len(v) > 5:
+            # display:
             print('cluster {} has {} assignments for {} hashvals / {} bp'.format(n, len(k), len(v), dblist[0].scaled * len(v)))
             confused_hashvals.update(v)
             for lineage in k:
@@ -77,11 +81,8 @@ def make_lca_counts(dblist, min_num=0):
     return counts, confused_hashvals
 
 
-def rankinfo_main(args):
-    """
-    rankinfo!
-    """
-    p = SourmashArgumentParser(prog="sourmash lca rankinfo")
+def main(args):
+    p = argparse.ArgumentParser()
     p.add_argument('db', nargs='+')
     p.add_argument('--scaled', type=float)
     p.add_argument('-q', '--quiet', action='store_true',
@@ -103,6 +104,7 @@ def rankinfo_main(args):
 
     # load all the databases
     dblist, ksize, scaled = lca_utils.load_databases(args.db, args.scaled)
+    assert len(dblist) == 1
 
     # count all the LCAs across these databases
     counts, confused_hashvals = make_lca_counts(dblist, args.minimum_num)
@@ -112,4 +114,4 @@ def rankinfo_main(args):
 
 
 if __name__ == '__main__':
-    sys.exit(rankinfo_main(sys.argv[1:]))
+    sys.exit(main(sys.argv[1:]))
