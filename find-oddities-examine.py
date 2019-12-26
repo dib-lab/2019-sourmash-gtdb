@@ -10,6 +10,8 @@ from pymummer import coords_file, alignment, nucmer
 import gzip
 from collections import defaultdict
 import screed
+import shutil
+import math
 
 
 def find_genome_filename(genomes_dir, ident):
@@ -99,11 +101,12 @@ def main():
         if args.verbose:
             print(cluster_name, ident1, ident2)
 
-        genome1 = os.path.join(alignments_dir, ident1 + '.fa')
+        genome1 = os.path.join(alignments_dir, '{}.{}.fa'.format(cluster_name, ident1))
         with gzip.open(fn1) as fp1:
             with open(genome1, 'wb') as fp2:
                       fp2.write(fp1.read())
-        genome2 = os.path.join(alignments_dir, ident2 + '.fa')
+
+        genome2 = os.path.join(alignments_dir, '{}.{}.fa'.format(cluster_name, ident2))
         with gzip.open(fn2) as fp1:
             with open(genome2, 'wb') as fp2:
                       fp2.write(fp1.read())
@@ -151,9 +154,14 @@ def main():
         if row['lca']:
             lca_name = row['lca']
 
-        print('{}: {:.0f}kb aln ({:.0f}k {}-mers) across {}; longest contig: {:.0f} kb'.format(cluster_name, aligned_bp / 1000, int(row['shared_kmers']) / 1000, int(row['ksize']), lca_name, alignments[0].hit_length_qry / 1000))
+        shared_kmers = int(row['shared_kmers'])
+        ksize = int(row['ksize'])
+
+        print('{}: {:.0f}kb aln ({:.0f}k {}-mers) across {}; longest contig: {:.0f} kb'.format(cluster_name, aligned_bp / 1000, shared_kmers / 1000, ksize, lca_name, alignments[0].hit_length_qry / 1000))
         print('weighted percent identity across alignments: {:.1f}%'.format(weighted_percent_identity / all_bp))
-        print('skipped {:.0f} kb of alignments in {} alignments (too short or low identity)'.format(skipped_bp / 1000, skipped_aln))
+        print('skipped {:.0f} kb of alignments in {} alignments (< {} bp or < {:.0f}% identity)'.format(skipped_bp / 1000, skipped_aln, args.length_threshold, args.percent_threshold))
+        if abs(math.log(shared_kmers / aligned_bp) > 1):
+            print('** FLAG, oddly too little or too many aligned bp vs k-mers')
 
         ###
 
@@ -163,10 +171,14 @@ def main():
 
         bp_removed = remove_contigs(ident2, genome2, keep_d)
 
-        if bp_removed > 1.5*aligned_bp:
-            print('** FLAG, too much removed from', ident2)
-            os.unlink(genome2 + '.removed.fa')
+        flag_2 = 0
+        if bp_removed > 2.5*aligned_bp:
+            flag_2 = 1
+
+            # reset to rm kept, and removed is empty.
             os.unlink(genome2 + '.kept.fa')
+            with open(genome2 + '.removed.fa', 'wt') as fp:
+                pass
 
         ###
 
@@ -176,10 +188,20 @@ def main():
 
         bp_removed = remove_contigs(ident1, genome1, keep_d)
 
-        if bp_removed > 1.5*aligned_bp:
-            print('** FLAG, too much removed from', ident1)
-            os.unlink(genome1 + '.removed.fa')
+        flag_1 = 0
+        if bp_removed > 2.5*aligned_bp:
+            flag_1 = 1
+            # reset to rm kept, and removed is empty.
             os.unlink(genome1 + '.kept.fa')
+            with open(genome1 + '.removed.fa', 'wt') as fp:
+                pass
+
+        if flag_1 and flag_2:
+            print('** FLAGFLAG, too much removed from both!')
+        elif flag_1 and not flag_2:
+            print('** FLAG, {} is probably contaminated (too much rm from {})'.format(ident2, ident1))
+        elif flag_2 and not flag_1:
+            print('** FLAG, {} is probably contaminated (too much rm from {})'.format(ident1, ident2))
 
         print('')
 
