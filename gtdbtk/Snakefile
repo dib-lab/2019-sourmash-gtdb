@@ -4,7 +4,7 @@ import random
 all_files = []
 for root, dirs, files in os.walk('genomes/', topdown=False):
     for name in files:
-        if name.endswith('_genomic.fna.gz'):
+        if name.endswith('fna.gz'):
             filename = os.path.join(root, name)
             if filename.startswith('./'): filename = filename[2:]
             all_files.append(filename)

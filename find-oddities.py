@@ -81,8 +81,8 @@ def make_lca_counts(dblist, lowest_rank='phylum', min_num=0, min_hashes=5,
 
     fp = open(prefix + '.csv', 'wt')
     w = csv.writer(fp)
-    w.writerow(['cluster', 'num_lineages', 'shared_bp', 'rank', 'lca',
-                'ident1', 'lineage1', 'ident2', 'lineage2'])
+    w.writerow(['cluster', 'num_lineages', 'shared_kmers', 'ksize', 'rank',
+                'lca', 'ident1', 'lineage1', 'ident2', 'lineage2'])
 
     # filter & display
     for n, (lineages, hashvals) in enumerate(mixdict_items):
@@ -120,6 +120,7 @@ def make_lca_counts(dblist, lowest_rank='phylum', min_num=0, min_hashes=5,
         w.writerow(['cluster{}'.format(n),
                     len(lineages),
                     len(hashvals) * dblist[0].scaled,
+                    dblist[0].ksize,
                     rank,
                     lca_utils.display_lineage(lca),
                     idents[0],
