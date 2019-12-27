@@ -1,10 +1,16 @@
 import os
 import random
 
+filter_prefixes=['TOBG']
+genomes_extension='.fna'
+scaled=10000
+build_ksizes=[51]
+require_taxonomy_bool=0
+
 all_files = []
 for root, dirs, files in os.walk('genomes/', topdown=False):
     for name in files:
-        if name.endswith('fna.gz') or name.endswith('.fa') or name.endswith('fna'):
+        if name.endswith(genomes_extension):
             filename = os.path.join(root, name)
             if filename.startswith('./'): filename = filename[2:]
             all_files.append(filename)
@@ -13,34 +19,22 @@ rule all:
     input:
         "outputs/gtdbtk/",
         [ i + '.sig' for i in all_files ],
+        expand("outputs/{prefix}-genomes-k{k}.lca.json.gz", k=build_ksizes,
+               prefix=filter_prefixes),
+        expand("outputs/{prefix}-oddities-k{k}.txt", k=build_ksizes,
+                prefix=filter_prefixes),
+        expand("outputs/{prefix}-oddities-k{k}.examine.txt", k=build_ksizes,
+                prefix=filter_prefixes)
 
 rule sigs:
     input:
         "{genome}"
     output:
         "{genome}.sig"
-    shell:
-        "sourmash compute -k 21,31,51 --scaled=1000 {input} -o {output}"
-
-rule lca:
-    input:
-        "{genome}.sig"
-    output:
-        "{genome}.sig.lca.k{ksize}.txt"
     params:
-        ksize="{ksize}"
+        extension=genomes_extension
     shell:
-        "sourmash lca summarize --query {input} --db ~/sourmash_databases/gtdb/gtdb-release89-k{params.ksize}.lca.json.gz -o {output}"
-
-rule sbt:
-    input:
-        "{genome}.sig"
-    output:
-        "{genome}.sig.sbt.k{ksize}.txt"
-    params:
-        ksize="{ksize}"
-    shell:
-        "sourmash gather {input} ~/sourmash_databases/gtdb/gtdb-release89-k{params.ksize}.sbt.json -o {output} -k {params.ksize} --scaled=10000"
+        "sourmash compute -k 21,31,51 --scaled=1000 {input} -o {output} --merge=$(basename {input} {params.extension})"
 
 rule gtdbtk_gather_matches:
     """
@@ -57,3 +51,39 @@ rule gtdbtk_gather_matches:
     shell:'''
     gtdbtk classify_wf --genome_dir {input} --out_dir {params.outdir} --cpus 8 --extension fna
     '''
+
+rule make_lineages_csv:
+    input:
+        "outputs/gtdbtk/"
+    output:
+        "outputs/{filter_prefix}-lineages.csv"
+    shell:
+        "../gtdbtk-to-lineages-csv.py outputs/gtdbtk/ {output} --filter-prefix={wildcards.filter_prefix:q}"
+
+rule make_lca_db:
+    input:
+        "outputs/{prefix}-lineages.csv"
+    output:
+        "outputs/{prefix}-genomes-k{ksize}.lca.json.gz"
+    params:
+        scaled=scaled,
+        require_taxonomy_arg="--require-taxonomy"
+    shell:
+        "sourmash lca index {params.require_taxonomy_arg} {input} {output} --traverse-directory genomes -k {wildcards.ksize} --scaled={params.scaled}"
+
+rule make_oddities_txt:
+    input:
+        "outputs/{prefix}-genomes-k{ksize}.lca.json.gz"
+    output:
+        "outputs/{prefix}-oddities-k{ksize,[0-9]+}.txt"
+    shell:
+        "../find-oddities.py {input} --lowest-rank=superkingdom --minimum-hashes=10 --prefix=outputs/{wildcards.prefix}-oddities-k{wildcards.ksize} > {output}"
+
+rule make_oddities_examine_txt:
+    input:
+        "outputs/{prefix}-oddities-k{ksize}.txt",
+        "outputs/{prefix}-genomes-k{ksize}.lca.json.gz"
+    output:
+        "outputs/{prefix}-oddities-k{ksize,[0-9]+}.examine.txt"
+    shell:
+        "../find-oddities-examine.py outputs/{wildcards.prefix}-oddities-k{wildcards.ksize}.csv genomes/ --percent-threshold=95 --length-threshold=0 > {output}"

@@ -50,7 +50,7 @@ def make_lca_counts(dblist, lowest_rank='phylum', min_num=0, min_hashes=5,
 
         # for each list of tuple_info [(rank, name), ...] build
         # a tree that lets us discover lowest-common-ancestor.
-        debug(lineages)
+        debug("{}", lineages)
         tree = lca_utils.build_tree(lineages)
 
         # now find either a leaf or the first node with multiple
@@ -85,6 +85,7 @@ def make_lca_counts(dblist, lowest_rank='phylum', min_num=0, min_hashes=5,
                 'lca', 'ident1', 'lineage1', 'ident2', 'lineage2'])
 
     # filter & display
+    cluster_n = 0
     for n, (lineages, hashvals) in enumerate(mixdict_items):
         # insist on more than N hash vals
         if len(hashvals) < min_hashes:
@@ -102,35 +103,64 @@ def make_lca_counts(dblist, lowest_rank='phylum', min_num=0, min_hashes=5,
             rank = 'root'
         print('rank & lca:', rank, lca_utils.display_lineage(lca))
 
-        lin_display = []
-        idents = {}
+        all_idxs = []
         for lineage_n, lineage in enumerate(lineages):
             print('* ', lca_utils.display_lineage(lineage))
 
             lids = dblist[0].lineage_to_lids[lineage]
             for lid in lids:
                 idxs = dblist[0].lid_to_idx[lid]
+                all_idxs.extend(idxs)
                 for idx in idxs:
                     ident = dblist[0].idx_to_ident[idx]
                     print('  ', ident)
-                    lin_display.append(lca_utils.display_lineage(lineage))
-                    idents[lineage_n] = ident
         print('')
 
-        if len(idents) < 2:
-            print('** only one ident, skipping csv out.')
-            continue
+        for i in range(len(all_idxs)):
+            idx1 = all_idxs[i]
+            lid1 = dblist[0].idx_to_lid[idx1]
+            lin1 = dblist[0].lid_to_lineage[lid1]
+            for j in range(i):
+                idx2 = all_idxs[j]
+                lid2 = dblist[0].idx_to_lid[idx2]
+                lin2 = dblist[0].lid_to_lineage[lid2]
 
-        w.writerow(['cluster{}'.format(n),
-                    len(lineages),
-                    len(hashvals) * dblist[0].scaled,
-                    dblist[0].ksize,
-                    rank,
-                    lca_utils.display_lineage(lca),
-                    idents[0],
-                    lin_display[0],
-                    idents[1],
-                    lin_display[1]])
+                ident1 = dblist[0].idx_to_ident[idx1]
+                ident2 = dblist[0].idx_to_ident[idx2]
+
+                debug("{} x {}", ident1, ident2)
+
+                this_tree = lca_utils.build_tree([lin1, lin2])
+                this_lca, this_reason = lca_utils.find_lca(this_tree)
+
+                if lca != this_lca:
+                    #print('skip lca', lca, this_lca)
+                    continue
+
+                mh1 = dblist[0]._signatures[idx1]
+                mh2 = dblist[0]._signatures[idx2]
+
+                mins1 = set(mh1.get_mins())
+                mins2 = set(mh2.get_mins())
+
+                intersect_size = len(mins1.intersection(mins2))
+
+                if intersect_size < min_hashes:
+                    #print('skip', intersect_size, len(mh1), len(mh2))
+                    continue
+
+                w.writerow(['cluster{}'.format(cluster_n),
+                            len(lineages),
+                            intersect_size * dblist[0].scaled,
+                            dblist[0].ksize,
+                            rank,
+                            lca_utils.display_lineage(lca),
+                            ident1,
+                            lca_utils.display_lineage(lin1),
+                            ident2,
+                            lca_utils.display_lineage(lin2)])
+
+                cluster_n += 1
 
     return counts, confused_hashvals
 

@@ -19,15 +19,18 @@ def main():
 
     tk_d = {}
     bac_summary = os.path.join(args.gtdbtk_dir, 'gtdbtk.bac120.summary.tsv')
-    with open(bac_summary, 'rt') as fp:
-        r = csv.DictReader(fp, delimiter='\t')
-        for row in r:
-            tk_d[row['user_genome']] = row['classification']
+    if os.path.exists(bac_summary):
+        with open(bac_summary, 'rt') as fp:
+            r = csv.DictReader(fp, delimiter='\t')
+            for row in r:
+                tk_d[row['user_genome']] = row['classification']
+
     ar_summary = os.path.join(args.gtdbtk_dir, 'gtdbtk.ar122.summary.tsv')
-    with open(ar_summary, 'rt') as fp:
-        r = csv.DictReader(fp, delimiter='\t')
-        for row in r:
-            tk_d[row['user_genome']] = row['classification']
+    if os.path.exists(ar_summary):
+        with open(ar_summary, 'rt') as fp:
+            r = csv.DictReader(fp, delimiter='\t')
+            for row in r:
+                tk_d[row['user_genome']] = row['classification']
 
     print('loaded {} rows from gtdbtk classify_wf in dir {}'.format(len(tk_d), args.gtdbtk_dir))
 
@@ -44,8 +47,7 @@ def main():
             n_skipped += 1
             continue
 
-        filename = 'genomes/' + ident + '.fna'
-        row = [filename] + tax.split(';')
+        row = [ident] + tax.split(';')
         while len(row[-1]) ==3 and row[-1].endswith('__'):
             row.pop()
         w.writerow(row)
