@@ -4,7 +4,7 @@ import random
 all_files = []
 for root, dirs, files in os.walk('genomes/', topdown=False):
     for name in files:
-        if name.endswith('fna.gz'):
+        if name.endswith('fna.gz') or name.endswith('.fa') or name.endswith('fna'):
             filename = os.path.join(root, name)
             if filename.startswith('./'): filename = filename[2:]
             all_files.append(filename)
@@ -55,5 +55,5 @@ rule gtdbtk_gather_matches:
     params:  outdir = "outputs/gtdbtk"
     conda: "env-gtdbtk.yml"
     shell:'''
-    gtdbtk classify_wf --genome_dir {input} --out_dir {params.outdir} --cpus 8 --extension fna.gz
+    gtdbtk classify_wf --genome_dir {input} --out_dir {params.outdir} --cpus 8 --extension fna
     '''
