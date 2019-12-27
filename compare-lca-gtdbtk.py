@@ -149,7 +149,5 @@ def main():
     print('match at full GTDB-Tk lineage: {:.1f}'.format(n_match2 / total * 100))
 
 
-
-
 if __name__ == '__main__':
     main()
