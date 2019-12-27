@@ -14,13 +14,23 @@ import shutil
 import math
 
 
-def find_genome_filename(genomes_dir, ident):
-    pattern = os.path.join(genomes_dir, ident + '*_genomic.fna.gz')
-    matches = glob.glob(pattern)
-    if len(matches) != 1:
-        assert 0, "more than one match to {}; {}".format(ident, matches)
+GENOME_SUFFIXES = ['', '*_genomic.fna.gz', '*.fna']
 
-    return matches[0]
+
+def find_genome_filename(genomes_dir, ident):
+    for suffix in GENOME_SUFFIXES:
+        pattern = os.path.join(genomes_dir, ident + suffix)
+        matches = glob.glob(pattern)
+        if len(matches) > 1:
+            assert 0, "more than one match to {}; {}".format(ident, matches)
+
+        if matches:
+            assert len(matches) == 1
+            return matches[0]
+
+    print('no matches in {} for {}'.format(genomes_dir, ident))
+    print('looking for suffixes:', GENOME_SUFFIXES)
+    assert 0, "cannot find matches"
 
 
 def remove_contigs(ident, genomefile, keep_d, verbose=True):
@@ -65,7 +75,7 @@ def main():
     p.add_argument('genomes_dir', help='fastani database dir')
     p.add_argument('--percent-threshold', type=float,
                    default=95.0)
-    p.add_argument('--length-threshold', type=int, default=500)
+    p.add_argument('--length-threshold', type=int, default=0)
     p.add_argument('-v', '--verbose', action='store_true')
     args = p.parse_args()
 
@@ -92,8 +102,8 @@ def main():
 
     for row in r:
         cluster_name = row['cluster']
-        ident1 = row['ident1']
-        ident2 = row['ident2']
+        ident1 = os.path.basename(row['ident1'])
+        ident2 = os.path.basename(row['ident2'])
 
         fn1 = find_genome_filename(args.genomes_dir, ident1)
         fn2 = find_genome_filename(args.genomes_dir, ident2)
@@ -102,19 +112,23 @@ def main():
             print(cluster_name, ident1, ident2)
 
         genome1 = os.path.join(alignments_dir, '{}.{}.fa'.format(cluster_name, ident1))
-        with gzip.open(fn1) as fp1:
+        xopen = open
+        if fn1.endswith('.gz'): xopen = gzip.open
+        with xopen(fn1, 'rb') as fp1:
             with open(genome1, 'wb') as fp2:
                       fp2.write(fp1.read())
 
         genome2 = os.path.join(alignments_dir, '{}.{}.fa'.format(cluster_name, ident2))
-        with gzip.open(fn2) as fp1:
+        xopen = open
+        if fn2.endswith('.gz'): xopen = gzip.open
+        with xopen(fn2, 'rb') as fp1:
             with open(genome2, 'wb') as fp2:
                       fp2.write(fp1.read())
             
         nucmer_output_name = os.path.join(alignments_dir, cluster_name + '.a')
 
         if not os.path.exists(nucmer_output_name):
-            print('running...')
+            print('running {} alignments...'.format(cluster_name))
             runner = nucmer.Runner(genome1, genome2, nucmer_output_name)
             runner.run()
             print('...done!')
@@ -150,6 +164,11 @@ def main():
                 skipped_bp += alignment.hit_length_qry
                 skipped_aln += 1
 
+        if not keep_alignments:
+            print('** FLAG: no kept alignments for {}, punting.'.format(cluster_name))
+            print('')
+            continue
+
         lca_name = "(root)"
         if row['lca']:
             lca_name = row['lca']
@@ -157,7 +176,7 @@ def main():
         shared_kmers = int(row['shared_kmers'])
         ksize = int(row['ksize'])
 
-        print('{}: {:.0f}kb aln ({:.0f}k {}-mers) across {}; longest contig: {:.0f} kb'.format(cluster_name, aligned_bp / 1000, shared_kmers / 1000, ksize, lca_name, alignments[0].hit_length_qry / 1000))
+        print('{}: {:.0f}kb aln ({:.0f}k {}-mers) across {}; longest contig: {:.0f} kb'.format(cluster_name, aligned_bp / 1000, shared_kmers / 1000, ksize, lca_name, keep_alignments[0].hit_length_qry / 1000))
         print('weighted percent identity across alignments: {:.1f}%'.format(weighted_percent_identity / all_bp))
         print('skipped {:.0f} kb of alignments in {} alignments (< {} bp or < {:.0f}% identity)'.format(skipped_bp / 1000, skipped_aln, args.length_threshold, args.percent_threshold))
         if abs(math.log(shared_kmers / aligned_bp) > 1):
