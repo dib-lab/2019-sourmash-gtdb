@@ -103,8 +103,8 @@ def make_lca_counts(dblist, lowest_rank='phylum', min_num=0, min_hashes=5,
         print('rank & lca:', rank, lca_utils.display_lineage(lca))
 
         lin_display = []
-        idents = []
-        for lineage in lineages:
+        idents = {}
+        for lineage_n, lineage in enumerate(lineages):
             print('* ', lca_utils.display_lineage(lineage))
 
             lids = dblist[0].lineage_to_lids[lineage]
@@ -114,8 +114,12 @@ def make_lca_counts(dblist, lowest_rank='phylum', min_num=0, min_hashes=5,
                     ident = dblist[0].idx_to_ident[idx]
                     print('  ', ident)
                     lin_display.append(lca_utils.display_lineage(lineage))
-                    idents.append(ident)
+                    idents[lineage_n] = ident
         print('')
+
+        if len(idents) < 2:
+            print('** only one ident, skipping csv out.')
+            continue
 
         w.writerow(['cluster{}'.format(n),
                     len(lineages),
