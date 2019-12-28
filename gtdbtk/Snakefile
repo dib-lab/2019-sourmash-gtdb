@@ -1,14 +1,23 @@
+configfile: 'config.yml'
+
+filter_prefixes = config['filter_prefixes']
+genomes_extension = config['genomes_extension']
+scaled = int(config['scaled'])
+build_ksizes = [ int(k) for k in config['build_ksizes'] ]
+outputs_dir = config.get('outputs_dir', 'outputs')
+genomes_dir = config.get('genomes_dir', 'genomes')
+
+###
+
+require_taxonomy_bool=0
+
+###
+
 import os
 import random
 
-filter_prefixes=['TOBG']
-genomes_extension='.fna'
-scaled=10000
-build_ksizes=[51]
-require_taxonomy_bool=0
-
 all_files = []
-for root, dirs, files in os.walk('genomes/', topdown=False):
+for root, dirs, files in os.walk(genomes_dir, topdown=False):
     for name in files:
         if name.endswith(genomes_extension):
             filename = os.path.join(root, name)
@@ -17,14 +26,14 @@ for root, dirs, files in os.walk('genomes/', topdown=False):
 
 rule all:
     input:
-        "outputs/gtdbtk/",
+        os.path.join(outputs_dir, "gtdbtk/"),
         [ i + '.sig' for i in all_files ],
-        expand("outputs/{prefix}-genomes-k{k}.lca.json.gz", k=build_ksizes,
-               prefix=filter_prefixes),
-        expand("outputs/{prefix}-oddities-k{k}.txt", k=build_ksizes,
-                prefix=filter_prefixes),
-        expand("outputs/{prefix}-oddities-k{k}.examine.txt", k=build_ksizes,
-                prefix=filter_prefixes)
+        expand("{outprefix}/{prefix}-genomes-k{k}.lca.json.gz", k=build_ksizes,
+               prefix=filter_prefixes, outprefix=outputs_dir),
+        expand("{outprefix}/{prefix}-oddities-k{k}.txt", k=build_ksizes,
+                prefix=filter_prefixes, outprefix=outputs_dir),
+        expand("{outprefix}/{prefix}-oddities-k{k}.examine.txt",
+               k=build_ksizes, prefix=filter_prefixes, outprefix=outputs_dir)
 
 rule sigs:
     input:
@@ -44,27 +53,29 @@ rule gtdbtk_gather_matches:
     The path is in this file:
     .snakemake/conda/1261315d/etc/conda/activate.d/gtdbtk.sh
     """
-    input: "genomes"
-    output: directory("outputs/gtdbtk/")
-    params:  outdir = "outputs/gtdbtk"
+    input: genomes_dir
+    output: directory(expand("{outprefix}/gtdbtk/", outprefix=outputs_dir))
+    params:
+        outdir = expand("{outprefix}/gtdbtk", outprefix=outputs_dir),
+        extension=genomes_extension
     conda: "env-gtdbtk.yml"
     shell:'''
-    gtdbtk classify_wf --genome_dir {input} --out_dir {params.outdir} --cpus 8 --extension fna
+    gtdbtk classify_wf --genome_dir {input} --out_dir {params.outdir} --cpus 8 --extension {params.extension}
     '''
 
 rule make_lineages_csv:
     input:
-        "outputs/gtdbtk/"
+        expand("{outprefix}/gtdbtk/", outprefix=outputs_dir)
     output:
-        "outputs/{filter_prefix}-lineages.csv"
+        expand("{outprefix}/{{filter_prefix}}-lineages.csv", outprefix=outputs_dir)
     shell:
         "../gtdbtk-to-lineages-csv.py outputs/gtdbtk/ {output} --filter-prefix={wildcards.filter_prefix:q}"
 
 rule make_lca_db:
     input:
-        "outputs/{prefix}-lineages.csv"
+        os.path.join(outputs_dir, "{prefix}-lineages.csv"),
     output:
-        "outputs/{prefix}-genomes-k{ksize}.lca.json.gz"
+        os.path.join(outputs_dir, "{prefix}-genomes-k{ksize}.lca.json.gz")
     params:
         scaled=scaled,
         require_taxonomy_arg="--require-taxonomy"
@@ -73,17 +84,17 @@ rule make_lca_db:
 
 rule make_oddities_txt:
     input:
-        "outputs/{prefix}-genomes-k{ksize}.lca.json.gz"
+        os.path.join(outputs_dir, "{prefix}-genomes-k{ksize}.lca.json.gz")
     output:
-        "outputs/{prefix}-oddities-k{ksize,[0-9]+}.txt"
+        os.path.join(outputs_dir, "{prefix}-oddities-k{ksize,[0-9]+}.txt")
     shell:
         "../find-oddities.py {input} --lowest-rank=superkingdom --minimum-hashes=10 --prefix=outputs/{wildcards.prefix}-oddities-k{wildcards.ksize} > {output}"
 
 rule make_oddities_examine_txt:
     input:
-        "outputs/{prefix}-oddities-k{ksize}.txt",
-        "outputs/{prefix}-genomes-k{ksize}.lca.json.gz"
+        os.path.join(outputs_dir, "{prefix}-oddities-k{ksize}.txt"),
+        os.path.join(outputs_dir, "{prefix}-genomes-k{ksize}.lca.json.gz")
     output:
-        "outputs/{prefix}-oddities-k{ksize,[0-9]+}.examine.txt"
+        os.path.join(outputs_dir, "{prefix}-oddities-k{ksize,[0-9]+}.examine.txt")
     shell:
         "../find-oddities-examine.py outputs/{wildcards.prefix}-oddities-k{wildcards.ksize}.csv genomes/ --percent-threshold=95 --length-threshold=0 > {output}"
