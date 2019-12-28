@@ -14,7 +14,7 @@ import shutil
 import math
 
 
-GENOME_SUFFIXES = ['', '*_genomic.fna.gz', '*.fna']
+GENOME_SUFFIXES = ['', '.fna', '*_genomic.fna.gz', '*.fna']
 
 
 def find_genome_filename(genomes_dir, ident):
@@ -30,7 +30,7 @@ def find_genome_filename(genomes_dir, ident):
 
     print('no matches in {} for {}'.format(genomes_dir, ident))
     print('looking for suffixes:', GENOME_SUFFIXES)
-    assert 0, "cannot find matches"
+    assert 0, "cannot find matches to {} in {}".format(ident, genomes_dir)
 
 
 def remove_contigs(ident, genomefile, keep_d, verbose=True):
@@ -84,7 +84,8 @@ def main():
     print('length threshold for alignments (bp):', args.length_threshold)
     print('lower cutoff for identity (%):', args.percent_threshold)
 
-    prefix = os.path.basename(args.oddities_csv)
+    prefix = args.oddities_csv
+    assert prefix.endswith('.csv')
     if prefix.endswith('.csv'):
         prefix = prefix[:-4]
 

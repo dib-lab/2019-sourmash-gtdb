@@ -68,8 +68,10 @@ rule make_lineages_csv:
         expand("{outprefix}/gtdbtk/", outprefix=outputs_dir)
     output:
         expand("{outprefix}/{{filter_prefix}}-lineages.csv", outprefix=outputs_dir)
+    params:
+        outputs_dir=outputs_dir
     shell:
-        "../gtdbtk-to-lineages-csv.py outputs/gtdbtk/ {output} --filter-prefix={wildcards.filter_prefix:q}"
+        "../gtdbtk-to-lineages-csv.py {params.outputs_dir}/gtdbtk/ {output} --filter-prefix={wildcards.filter_prefix:q}"
 
 rule make_lca_db:
     input:
@@ -78,23 +80,31 @@ rule make_lca_db:
         os.path.join(outputs_dir, "{prefix}-genomes-k{ksize}.lca.json.gz")
     params:
         scaled=scaled,
-        require_taxonomy_arg="--require-taxonomy"
+        require_taxonomy_arg="--require-taxonomy",
+        genomes_dir=genomes_dir
     shell:
-        "sourmash lca index {params.require_taxonomy_arg} {input} {output} --traverse-directory genomes -k {wildcards.ksize} --scaled={params.scaled}"
+        "sourmash lca index {params.require_taxonomy_arg} {input} {output} --traverse-directory {params.genomes_dir} -k {wildcards.ksize} --scaled={params.scaled}"
 
 rule make_oddities_txt:
     input:
         os.path.join(outputs_dir, "{prefix}-genomes-k{ksize}.lca.json.gz")
     output:
-        os.path.join(outputs_dir, "{prefix}-oddities-k{ksize,[0-9]+}.txt")
+        os.path.join(outputs_dir, "{prefix}-oddities-k{ksize,[0-9]+}.txt"),
+        os.path.join(outputs_dir, "{prefix}-oddities-k{ksize,[0-9]+}.csv")
+    params:
+        outputs_dir=outputs_dir
     shell:
-        "../find-oddities.py {input} --lowest-rank=superkingdom --minimum-hashes=10 --prefix=outputs/{wildcards.prefix}-oddities-k{wildcards.ksize} > {output}"
+        "../find-oddities.py {input} --lowest-rank=superkingdom --minimum-hashes=10 --prefix={params.outputs_dir}/{wildcards.prefix}-oddities-k{wildcards.ksize} > {output[0]}"
 
 rule make_oddities_examine_txt:
     input:
         os.path.join(outputs_dir, "{prefix}-oddities-k{ksize}.txt"),
-        os.path.join(outputs_dir, "{prefix}-genomes-k{ksize}.lca.json.gz")
+        os.path.join(outputs_dir, "{prefix}-genomes-k{ksize}.lca.json.gz"),
+        os.path.join(outputs_dir, "{prefix}-oddities-k{ksize}.csv")
     output:
         os.path.join(outputs_dir, "{prefix}-oddities-k{ksize,[0-9]+}.examine.txt")
+    params:
+        outputs_dir=outputs_dir,
+        genomes_dir=genomes_dir
     shell:
-        "../find-oddities-examine.py outputs/{wildcards.prefix}-oddities-k{wildcards.ksize}.csv genomes/ --percent-threshold=95 --length-threshold=0 > {output}"
+        "../find-oddities-examine.py {params.outputs_dir}/{wildcards.prefix}-oddities-k{wildcards.ksize}.csv {params.genomes_dir} --percent-threshold=95 --length-threshold=0 > {output}"
