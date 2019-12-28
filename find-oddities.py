@@ -85,14 +85,13 @@ def make_lca_counts(dblist, lowest_rank='phylum', min_num=0, min_hashes=5,
                 'lca', 'ident1', 'lineage1', 'ident2', 'lineage2'])
 
     # filter & display
-    cluster_n = 0
-    for n, (lineages, hashvals) in enumerate(mixdict_items):
+    for cluster_n, (lineages, hashvals) in enumerate(mixdict_items):
         # insist on more than N hash vals
         if len(hashvals) < min_hashes:
             continue
         
         # display summary:
-        print('cluster {} has {} assignments for {} hashvals / {} bp'.format(n, len(lineages), len(hashvals), dblist[0].scaled * len(hashvals)))
+        print('cluster {} has {} assignments for {} hashvals / {} bp'.format(cluster_n, len(lineages), len(hashvals), dblist[0].scaled * len(hashvals)))
         confused_hashvals.update(hashvals)
 
         tree = lca_utils.build_tree(lineages)
@@ -116,6 +115,7 @@ def make_lca_counts(dblist, lowest_rank='phylum', min_num=0, min_hashes=5,
                     print('  ', ident)
         print('')
 
+        pair_n = 0
         for i in range(len(all_idxs)):
             idx1 = all_idxs[i]
             lid1 = dblist[0].idx_to_lid[idx1]
@@ -149,7 +149,7 @@ def make_lca_counts(dblist, lowest_rank='phylum', min_num=0, min_hashes=5,
                     #print('skip', intersect_size, len(mh1), len(mh2))
                     continue
 
-                w.writerow(['cluster{}'.format(cluster_n),
+                w.writerow(['cluster{}.{}'.format(cluster_n, pair_n),
                             len(lineages),
                             intersect_size * dblist[0].scaled,
                             dblist[0].ksize,
@@ -160,7 +160,7 @@ def make_lca_counts(dblist, lowest_rank='phylum', min_num=0, min_hashes=5,
                             ident2,
                             lca_utils.display_lineage(lin2)])
 
-                cluster_n += 1
+                pair_n += 1
 
     return counts, confused_hashvals
 
