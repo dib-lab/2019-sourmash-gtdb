@@ -53,6 +53,9 @@ def main():
         w.writerow(row)
         n_written += 1
 
+    if not n_written:
+        raise Exception("0 written of {} rows - something went wrong!".format(len(tk_d)))
+
     print('wrote {} rows to {}'.format(n_written, args.lineages_csv_out))
     if n_skipped:
         print('(skipped {} because of --filter-prefix)'.format(n_skipped))

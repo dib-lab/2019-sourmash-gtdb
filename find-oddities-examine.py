@@ -14,10 +14,13 @@ import shutil
 import math
 
 
-GENOME_SUFFIXES = ['', '.fna', '*_genomic.fna.gz', '*.fna']
+GENOME_SUFFIXES = ['', '.fna', '.fa', '*_genomic.fna.gz', '*.fna', '*.fa']
 
 
 def find_genome_filename(genomes_dir, ident):
+    """Find the genome for the given identifier by guessing at extensions.
+    Complain bitterly if a single match cannot be found."""
+
     for suffix in GENOME_SUFFIXES:
         pattern = os.path.join(genomes_dir, ident + suffix)
         matches = glob.glob(pattern)
@@ -69,6 +72,15 @@ def remove_contigs(ident, genomefile, keep_d, verbose=True):
     return bp_skipped
 
 
+def copy_and_gunzip_genome(from_name, to_name):
+        xopen = open
+        if from_name.endswith('.gz'):
+            xopen = gzip.open
+        with xopen(from_name, 'rb') as fp1:
+            with open(to_name, 'wb') as fp2:
+                      fp2.write(fp1.read())
+
+
 def main():
     p = argparse.ArgumentParser()
     p.add_argument('oddities_csv')
@@ -97,7 +109,7 @@ def main():
     try:
         os.mkdir(alignments_dir)
     except FileExistsError:
-        pass
+        print('warning: directory already exists!')
 
     print('----')
 
@@ -106,26 +118,19 @@ def main():
         ident1 = os.path.basename(row['ident1'])
         ident2 = os.path.basename(row['ident2'])
 
-        fn1 = find_genome_filename(args.genomes_dir, ident1)
-        fn2 = find_genome_filename(args.genomes_dir, ident2)
-
         if args.verbose:
             print(cluster_name, ident1, ident2)
 
+        # copy & name genome files "clusterx.y.IDENT.fa. gunzip if necessary,
+        # since nucmer doesn't handle gzip.
+        fn1 = find_genome_filename(args.genomes_dir, ident1)
         genome1 = os.path.join(alignments_dir, '{}.{}.fa'.format(cluster_name, ident1))
-        xopen = open
-        if fn1.endswith('.gz'): xopen = gzip.open
-        with xopen(fn1, 'rb') as fp1:
-            with open(genome1, 'wb') as fp2:
-                      fp2.write(fp1.read())
+        copy_and_gunzip_genome(fn1, genome1)
 
+        fn2 = find_genome_filename(args.genomes_dir, ident2)
         genome2 = os.path.join(alignments_dir, '{}.{}.fa'.format(cluster_name, ident2))
-        xopen = open
-        if fn2.endswith('.gz'): xopen = gzip.open
-        with xopen(fn2, 'rb') as fp1:
-            with open(genome2, 'wb') as fp2:
-                      fp2.write(fp1.read())
-            
+        copy_and_gunzip_genome(fn2, genome2)
+
         nucmer_output_name = os.path.join(alignments_dir, cluster_name + '.a')
 
         if not os.path.exists(nucmer_output_name):
@@ -143,12 +148,13 @@ def main():
         # alignment obj:
         # 'frame', 'hit_length_qry', 'hit_length_ref', 'intersects_variant', 'is_self_hit', 'on_same_strand', 'percent_identity', 'qry_coords', 'qry_coords_from_ref_coord', 'qry_end', 'qry_length', 'qry_name', 'qry_start', 'ref_coords', 'ref_coords_from_qry_coord', 'ref_end', 'ref_length', 'ref_name', 'ref_start', 'reverse_query', 'reverse_reference', 'to_msp_crunch']
 
+        # sort alignments by length of hit
         alignments.sort(key = lambda x: -x.hit_length_qry)
+
+        # track alignments over a particular threshold
         keep_alignments = []
-
-        aligned_bp = 0
-
         all_bp = 0
+        aligned_bp = 0
         weighted_percent_identity = 0.
         skipped_bp = 0
         skipped_aln = 0
@@ -157,6 +163,8 @@ def main():
             weighted_percent_identity += alignment.percent_identity * alignment.hit_length_qry
             all_bp += alignment.hit_length_qry
 
+            # do we pass the length and percent identitiy thresholds? if so,
+            # keep!
             if alignment.hit_length_qry >= args.length_threshold and \
                alignment.percent_identity >= args.percent_threshold:
                 aligned_bp += alignment.hit_length_qry
@@ -165,25 +173,28 @@ def main():
                 skipped_bp += alignment.hit_length_qry
                 skipped_aln += 1
 
+        # ditch if no alignments
         if not keep_alignments:
             print('** FLAG: no kept alignments for {}, punting.'.format(cluster_name))
             print('')
             continue
 
-        lca_name = "(root)"
+        # set up the printed out info
+        lca_name = "(root)"     # if empty lca, => root of taxonomy.
         if row['lca']:
             lca_name = row['lca']
 
         shared_kmers = int(row['shared_kmers'])
         ksize = int(row['ksize'])
 
+        # nice output! with some flags.
         print('{}: {:.0f}kb aln ({:.0f}k {}-mers) across {}; longest contig: {:.0f} kb'.format(cluster_name, aligned_bp / 1000, shared_kmers / 1000, ksize, lca_name, keep_alignments[0].hit_length_qry / 1000))
         print('weighted percent identity across alignments: {:.1f}%'.format(weighted_percent_identity / all_bp))
         print('skipped {:.0f} kb of alignments in {} alignments (< {} bp or < {:.0f}% identity)'.format(skipped_bp / 1000, skipped_aln, args.length_threshold, args.percent_threshold))
         if abs(math.log(shared_kmers / aligned_bp) > 1):
             print('** FLAG, oddly too little or too many aligned bp vs k-mers')
 
-        ###
+        ### track & remove contigs from query genome (genome2)
 
         keep_d = defaultdict(set)
         for aln in keep_alignments:
@@ -200,7 +211,7 @@ def main():
             with open(genome2 + '.removed.fa', 'wt') as fp:
                 pass
 
-        ###
+        ### track & remove contigs from ref genome (genome1)
 
         keep_d = defaultdict(set)
         for aln in keep_alignments:
@@ -216,6 +227,8 @@ def main():
             with open(genome1 + '.removed.fa', 'wt') as fp:
                 pass
 
+        # output summary of flags
+
         if flag_1 and flag_2:
             print('** FLAGFLAG, too much removed from both!')
         elif flag_1 and not flag_2:
@@ -224,6 +237,8 @@ def main():
             print('** FLAG, {} is probably contaminated (too much rm from {})'.format(ident1, ident2))
 
         print('')
+
+        # done with main loop!
 
 
 if __name__ == '__main__':

@@ -84,7 +84,10 @@ def make_lca_counts(dblist, lowest_rank='phylum', min_num=0, min_hashes=5,
     w.writerow(['cluster', 'num_lineages', 'shared_kmers', 'ksize', 'rank',
                 'lca', 'ident1', 'lineage1', 'ident2', 'lineage2'])
 
-    # filter & display
+    #
+    # find candidate lineages, then evaluate pairwise intersections.
+    #
+
     for cluster_n, (lineages, hashvals) in enumerate(mixdict_items):
         # insist on more than N hash vals
         if len(hashvals) < min_hashes:
@@ -115,6 +118,9 @@ def make_lca_counts(dblist, lowest_rank='phylum', min_num=0, min_hashes=5,
                     print('  ', ident)
         print('')
 
+        # run through and look at all pairs of genomes in these lineages;
+        # filter so that we're comparing across lineages with the right
+        # LCA, and with significant intersection.
         pair_n = 0
         for i in range(len(all_idxs)):
             idx1 = all_idxs[i]
@@ -133,8 +139,8 @@ def make_lca_counts(dblist, lowest_rank='phylum', min_num=0, min_hashes=5,
                 this_tree = lca_utils.build_tree([lin1, lin2])
                 this_lca, this_reason = lca_utils.find_lca(this_tree)
 
+                # weed out pairs that don't have the desired intersection
                 if lca != this_lca:
-                    #print('skip lca', lca, this_lca)
                     continue
 
                 mh1 = dblist[0]._signatures[idx1]
@@ -142,13 +148,13 @@ def make_lca_counts(dblist, lowest_rank='phylum', min_num=0, min_hashes=5,
 
                 mins1 = set(mh1.get_mins())
                 mins2 = set(mh2.get_mins())
-
                 intersect_size = len(mins1.intersection(mins2))
 
+                # weed out pairs that don't have enough k-mer intersection
                 if intersect_size < min_hashes:
-                    #print('skip', intersect_size, len(mh1), len(mh2))
                     continue
 
+                # write summary to CSV for find-oddities-examine.py to use
                 w.writerow(['cluster{}.{}'.format(cluster_n, pair_n),
                             len(lineages),
                             intersect_size * dblist[0].scaled,
