@@ -64,25 +64,27 @@ def main(args):
     n_missed = 0
     fp = open('{}-bulk-classify.csv'.format(args.prefix), 'wt')
     w = csv.writer(fp)
+    w.writerow(["rank", "name", "filename", "md5sum", "lineage"])
     for n, sig in enumerate(sbt_db.signatures()):
         if n % 100 == 0:
             print('...', n)
             fp.flush()
 
+        lineage = ''
         classified_as, why = classify_signature(sig, dblist, 5)
 
         if classified_as:
-#            print('**', why, classified_as[-1])
             rank = classified_as[-1].rank
             counts[rank] += 1
+            lineage = lca_utils.display_lineage(classified_as)
         elif why == 'disagree':
             rank = 'root'
+            lineage = ''
         else:
-#            print('** no classification')
             rank = 'MISSED'
             n_missed += 1
 
-        w.writerow([rank, sig.name(), sig.d['filename'], sig.md5sum()])
+        w.writerow([rank, sig.name(), sig.d['filename'], sig.md5sum(), lineage])
 
         if rank not in ('genus', 'species', 'family', 'order'):
             md5name = sig.md5sum()

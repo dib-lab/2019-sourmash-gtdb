@@ -103,25 +103,26 @@ def make_lca_counts(dblist, lowest_rank='phylum', min_num=0, min_hashes=5,
             rank = lca[-1].rank
         else:
             rank = 'root'
-        print('rank & lca:', rank, lca_utils.display_lineage(lca))
+        print('  rank & lca:', rank, lca_utils.display_lineage(lca))
 
+#        for lineage_n, lineage in enumerate(lineages):
+#            print('* ', lca_utils.display_lineage(lineage))
+
+        # now, identify all members of these lineages by their index:
         all_idxs = []
         for lineage_n, lineage in enumerate(lineages):
-            print('* ', lca_utils.display_lineage(lineage))
-
             lids = dblist[0].lineage_to_lids[lineage]
             for lid in lids:
                 idxs = dblist[0].lid_to_idx[lid]
                 all_idxs.extend(idxs)
                 for idx in idxs:
                     ident = dblist[0].idx_to_ident[idx]
-                    print('  ', ident)
-        print('')
 
         # run through and look at all pairs of genomes in these lineages;
         # filter so that we're comparing across lineages with the right
         # LCA, and with significant intersection.
         pair_n = 0
+        candidates = []
         for i in range(len(all_idxs)):
             idx1 = all_idxs[i]
             lid1 = dblist[0].idx_to_lid[idx1]
@@ -154,6 +155,9 @@ def make_lca_counts(dblist, lowest_rank='phylum', min_num=0, min_hashes=5,
                 if intersect_size < min_hashes:
                     continue
 
+                candidates.append((pair_n, ident1, lin1, ident2, lin2,
+                                   intersect_size))
+
                 # write summary to CSV for find-oddities-examine.py to use
                 w.writerow(['cluster{}.{}'.format(cluster_n, pair_n),
                             len(lineages),
@@ -167,6 +171,15 @@ def make_lca_counts(dblist, lowest_rank='phylum', min_num=0, min_hashes=5,
                             lca_utils.display_lineage(lin2)])
 
                 pair_n += 1
+
+        print('  Candidate genome pairs for these lineages:')
+        for pair_n, ident1, lin1, ident2, lin2, intersection_size in candidates:
+            print('    cluster.pair {}.{} share {} bases'.format(cluster_n, pair_n, intersection_size*dblist[0].scaled))
+            print('    - {} ({})'.format(ident1, lca_utils.display_lineage(lin1)))
+            print('    - {} ({})'.format(ident2, lca_utils.display_lineage(lin2)))
+            print('')
+
+        print('')
 
     return counts, confused_hashvals
 
