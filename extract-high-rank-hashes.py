@@ -59,7 +59,8 @@ def main(args):
                    help='suppress non-error output')
     p.add_argument('-d', '--debug', action='store_true',
                    help='output debugging output')
-    p.add_argument('-o', '--output', type=str, help='output prefix')
+    p.add_argument('-o', '--output', type=str, help='output filename')
+    p.add_argument('--lowest-rank', default='phylum')
     args = p.parse_args(args)
 
     if not args.db:
@@ -72,8 +73,16 @@ def main(args):
         args.scaled = int(args.scaled)
 
     if not args.output:
-        error('Please specify an output prefix with --output')
+        error('Please specify an output filename')
         sys.exit(-1)
+
+    keep_ranks = ['root']
+    for rank in lca_utils.taxlist():
+        keep_ranks.append(rank)
+        if rank == args.lowest_rank:
+            break
+
+    print('outputting hashvals at following ranks:', keep_ranks)
 
     # load all the databases
     dblist, ksize, scaled = lca_utils.load_databases(args.db, args.scaled)
@@ -90,7 +99,7 @@ def main(args):
     all_hashvals = set()
     if args.output:
         with open(args.output, 'wt') as fp:
-            for rank in ('root', 'superkingdom', 'class', 'phylum', 'order'):
+            for rank in keep_ranks:
                 for hashval in crossdict[rank]:
                     fp.write("{}\n".format(hashval))
                     n += 1
@@ -100,29 +109,6 @@ def main(args):
 
     total = sum([ len(v) for v in crossdict.values() ])
     print('wrote {} confused hashvals, of {} total'.format(n, total))
-
-    ### output genomes with shared hashes:
-
-    assert len(dblist) == 1
-    lca_db = dblist[0]
-    def get_idents(hashval):
-        idx_list = lca_db.hashval_to_idx[hashval]
-        idents = [ lca_db.idx_to_ident[idx] for idx in idx_list ]
-        return idents
-
-    pairs = defaultdict(int)
-    for hashval in all_hashvals:
-        idents = get_idents(hashval)
-        idents.sort()
-        idents = tuple(idents)
-        pairs[idents] += 1
-
-    with open(args.output + '.pickle', 'wb') as fp:
-        import pickle
-        pickle.dump(pairs, fp)
-
-    print('dumped {} combinations of genomes with shared hashes'.format(len(pairs)))
-    print('saved in', args.output + '.pickle')
 
 
 if __name__ == '__main__':

@@ -9,6 +9,7 @@ def main():
     p = argparse.ArgumentParser()
     p.add_argument('lca_db')
     p.add_argument('scrublist')
+    p.add_argument('-o', '--output')
     args = p.parse_args()
 
     (lca_db, ksize, scaled) = lca_utils.load_single_database(args.lca_db)
@@ -25,6 +26,8 @@ def main():
         del lca_db.hashval_to_idx[hashval]
 
     filename = 'scrub-{}'.format(args.lca_db)
+    if args.output:
+        filename = args.output
     print('saving scrubbed LCA db to {}'.format(filename))
     lca_db.save(filename)
 

@@ -14,6 +14,7 @@ import shutil
 import math
 
 
+# should change this so it's provided on command line, maybe...
 GENOME_SUFFIXES = ['', '.fna', '.fa', '*_genomic.fna.gz', '*.fna', '*.fa']
 
 
