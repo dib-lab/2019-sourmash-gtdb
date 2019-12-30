@@ -48,7 +48,7 @@ def main():
             continue
 
         row = [ident] + tax.split(';')
-        while len(row[-1]) ==3 and row[-1].endswith('__'):
+        while len(row[-1]) == 3 and row[-1].endswith('__'):
             row.pop()
         w.writerow(row)
         n_written += 1
