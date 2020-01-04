@@ -33,6 +33,8 @@ def main():
     consistent_at = defaultdict(int)
     disagree = 0
     disagree_at = defaultdict(int)
+
+    fp = open('superkingdom-and-phylum-list.txt', 'wt')
     
     for k in common:
         gtdb = gtdb_lineages[k]
@@ -51,6 +53,10 @@ def main():
                 if bulk:
                     rank = bulk[-1].rank
                 consistent_at[rank] += 1
+
+                if rank in ('superkingdom', 'phylum'):
+                    fp.write('{}\n'.format(k))
+
             else:
                 disagree += 1
 

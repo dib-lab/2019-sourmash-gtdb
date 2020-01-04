@@ -22,7 +22,8 @@ def main():
             r = csv.DictReader(fp)
             n = 0
             for n, row in enumerate(r):
-                ident = row['name'].split(' ')[0].split('.')[0]
+                #ident = row['name'].split(' ')[0].split('.')[0]
+                ident = row['name']
                 if ident in ident_to_tax:
                     print('*** WARNING *** ident {} occurs more than once!?'.format(ident))
                 ident_to_tax[ident] = row['lineage'].split(';')
